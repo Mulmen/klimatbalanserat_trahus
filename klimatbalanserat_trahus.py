@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus. Ver 1.7", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.7")
 st.markdown(
     "Modellera klimatnyttan av att bygga trähus och plantera produktiv skog! "
     "Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs."
