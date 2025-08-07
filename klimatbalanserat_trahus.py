@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.7")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.8")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -77,37 +77,28 @@ co2_i_skog = np.zeros_like(years, dtype=float)
 co2_i_hus = np.zeros_like(years, dtype=float)
 
 for t in years:
-    # Skog
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
 
-    # Hus
     tid_i_hus = t % hus_livslangd
 
     if virkes_hantering == "Bränns konventionellt (släpper ut all CO₂)":
         if bygg_igen:
-            # Sågtandskurva: nollställ på rivningsår, annars alltid ett hus åt gången
             if tid_i_hus == 0 and t != 0:
                 co2_i_hus[t] = 0
             else:
                 co2_i_hus[t] = co2_total
         else:
-            # Bara ett hus, aldrig nytt igen
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
-            elif t == hus_livslangd:
-                co2_i_hus[t] = 0
             else:
                 co2_i_hus[t] = 0
     else:
-        # Återanvändning eller bio-CCS: endast EN husvolym åt gången!
-        if bygg_igen:
+        # Återanvänds eller bio-CCS: EN husvolym CO₂ lagrad, aldrig mer eller mindre
+        if t < hus_livslangd or bygg_igen:
             co2_i_hus[t] = co2_total
         else:
-            if t < hus_livslangd:
-                co2_i_hus[t] = co2_total
-            else:
-                co2_i_hus[t] = co2_total  # huset kvarstår för evigt
+            co2_i_hus[t] = 0
 
 # --- 3. KLIMATNEUTRALITET ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
