@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.5")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.6")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -24,7 +24,6 @@ klimatpåverkan_per_m2 = st.sidebar.slider(
     "Husets klimatpåverkan (ton CO₂/m² BTA)", 0.150, 0.500, 0.250
 )
 
-# --- Kodord för selectbox! ---
 alternativ = {
     "Återanvänds till nytt hus": "ateranvandning",
     "Energiåtervinns med bio-CCS (koldioxidlagring)": "bioccs",
@@ -35,7 +34,7 @@ valt_svar = st.sidebar.selectbox(
     options=list(alternativ.keys()),
     index=0
 )
-virkes_hantering = alternativ[valt_svar]  # Kodord!
+virkes_hantering = alternativ[valt_svar]
 
 bygg_igen = st.sidebar.checkbox("Bygg nytt hus efter livslängd?", value=True)
 
@@ -76,25 +75,26 @@ for t in years:
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
 
-    tid_i_hus = t % hus_livslangd
+    if bygg_igen:
+        antal_hus = t // hus_livslangd + 1
+    else:
+        antal_hus = 1 if t < hus_livslangd else 0
 
     if virkes_hantering == "konventionell":
         if bygg_igen:
-            # Sågtand: co2_total under varje husperiod, 0 året när huset rivs
+            tid_i_hus = t % hus_livslangd
             if tid_i_hus < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
         else:
-            # Block: co2_total under första husets livslängd, sedan 0
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
 
     elif virkes_hantering in ("ateranvandning", "bioccs"):
-        # ALLTID EN husvolym co2_total i hela analysperioden!
-        co2_i_hus[t] = co2_total
+        co2_i_hus[t] = antal_hus * co2_total
 
     else:
         co2_i_hus[t] = 0
