@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver. 0.3")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.4")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -20,6 +20,10 @@ LCA_period = st.sidebar.slider("LCA-period (år, analys)", 30, 100, 50)
 rotation = st.sidebar.slider("Skogens rotationsperiod (år)", 50, 150, 80)
 hus_livslangd = st.sidebar.slider("Husets livslängd (år)", 20, 200, 100)
 max_years = st.sidebar.slider("Total tidsperiod (år)", 50, 200, 200)
+
+klimatpåverkan_per_m2 = st.sidebar.slider(
+    "Husets klimatpåverkan (ton CO₂/m² BTA)", 0.150, 0.500, 0.250
+)
 
 virkes_hantering = st.sidebar.selectbox(
     "Vad händer med virket efter husets rivning?",
@@ -49,41 +53,41 @@ co2_per_m3 = kg_torrsubstans_per_m3 * kolandel * co2_per_kg_kol / 1000
 
 skogsareal_ha = co2_total / (tillvaxt_skogen_m3_per_ha_ar * co2_per_m3 * rotation)
 
+# --- HUSETS TOTALA KLIMATBELASTNING ---
+klimatpåverkan_total = BTA * klimatpåverkan_per_m2  # ton CO₂
+
 # --- SIMULERING ---
 co2_i_skog = np.zeros_like(years, dtype=float)
 co2_i_hus = np.zeros_like(years, dtype=float)
 
 for t in years:
-    # Skogen: ackumulerar CO2 linjärt varje rotation, nollställs vid avverkning, startar om
+    # Skog: ackumulerar CO2 linjärt varje rotation, nollställs vid avverkning
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * tillvaxt_skogen_m3_per_ha_ar * co2_per_m3 * tid_i_rotation
 
     tid_i_hus = t % hus_livslangd
 
     if virkes_hantering == "Återanvänds till nytt hus":
-        # Virket lever vidare hela tiden (oavsett bygg_igen)
         co2_i_hus[t] = co2_total
     else:
         if bygg_igen:
-            # Bygg nytt hus efter varje livslängd
             if tid_i_hus == 0 and t != 0:
-                co2_i_hus[t] = 0  # Rivningsår
+                co2_i_hus[t] = 0
             else:
                 co2_i_hus[t] = co2_total
         else:
-            # Bygg bara ett hus, aldrig nytt efter rivning
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             elif t == hus_livslangd:
-                co2_i_hus[t] = 0  # Rivningsåret
+                co2_i_hus[t] = 0
             else:
-                co2_i_hus[t] = 0  # Efter rivning
+                co2_i_hus[t] = 0
 
 # --- Klimatneutralitet (%) ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
 for t in years:
-    if co2_i_hus[t] > 0:
-        klimatneutralitet[t] = 100 * co2_i_skog[t] / co2_i_hus[t]
+    if klimatpåverkan_total > 0:
+        klimatneutralitet[t] = 100 * co2_i_skog[t] / klimatpåverkan_total
     else:
         klimatneutralitet[t] = np.nan
 
@@ -104,12 +108,12 @@ ax1.legend()
 ax1.grid(alpha=0.3)
 
 fig2, ax2 = plt.subplots(figsize=(8, 4))
-ax2.plot(years, klimatneutralitet, label="Klimatneutralitet (%)", lw=2, color="purple")
+ax2.plot(years, klimatneutralitet, label="Klimatneutralitetsgrad (%)", lw=2, color="purple")
 ax2.axhline(100, color='gray', linestyle='--', label="100% klimatbalans")
 ax2.set_xlabel("Tid (år)")
 ax2.set_ylabel("Klimatneutralitetsgrad (%)")
 ax2.set_ylim(0, 150)
-ax2.set_title("Klimatneutralitet över tid")
+ax2.set_title("Klimatneutralitet över tid (skogsupptag/klimatpåverkan)")
 ax2.legend()
 ax2.grid(alpha=0.3)
 
@@ -124,7 +128,7 @@ ax3.grid(alpha=0.3)
 
 st.subheader("CO₂-lagring i trähus och produktiv skog över tid")
 st.pyplot(fig1)
-st.subheader("Klimatneutralitetsgrad för trähus över tid")
+st.subheader("Klimatneutralitetsgrad för trähus över tid (skogsupptag/klimatpåverkan)")
 st.pyplot(fig2)
 st.subheader("Kumulativt netto – skillnad mellan skogsupptag och inbyggd CO₂ i hus")
 st.pyplot(fig3)
@@ -133,8 +137,8 @@ with st.expander("Vetenskaplig bakgrund & källor"):
     st.markdown("""
     - Omvandlingsfaktor: 1 m³ virke = 750 kg torrsubstans (50% kol), 1 kg C = 3,67 kg CO₂.
     - Bonitet: Tillväxt i m³/ha/år enligt Skogsstyrelsen och SLU, t.ex. https://www.skogsstyrelsen.se.
-    - Ackumulerad CO₂ i skog nollställs vid varje ny skogsrotation, därefter planteras ny skog.
-    - Klimatneutralitet = (ackumulerad CO₂ i skog / inbyggd CO₂ i trähus) × 100.
+    - Klimatneutralitetsgrad = (ackumulerad CO₂ i skog / husets totala klimatpåverkan) × 100.
+    - Ackumulerad CO₂ i skog nollställs vid varje ny skogsrotation.
     - Hantering av virke vid rivning styr fortsatt kolinlagring (se IVL/SLU-rapporter).
     """)
 
