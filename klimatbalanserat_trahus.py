@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.4")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver. 0.5")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -15,7 +15,7 @@ st.sidebar.header("Justera modellparametrar")
 
 BTA = st.sidebar.slider("Bostadsyta (BTA), m²", 100, 10000, 150)
 virke_per_m2 = st.sidebar.slider("Mängd stomvirke (m³/m² BTA)", 0.1, 1.0, 0.35)
-bonitet = st.sidebar.slider("Bonitet gran (T/ha/år)", 4, 10, 8)
+bonitet = st.sidebar.slider("Bonitet (m³ virke/ha/år)", 4.0, 10.0, 8.0, 0.1)
 LCA_period = st.sidebar.slider("LCA-period (år, analys)", 30, 100, 50)
 rotation = st.sidebar.slider("Skogens rotationsperiod (år)", 50, 150, 80)
 hus_livslangd = st.sidebar.slider("Husets livslängd (år)", 20, 200, 100)
@@ -44,14 +44,15 @@ kg_torrsubstans_per_m3 = 750
 kolandel = 0.5
 co2_per_kg_kol = 3.67
 
-virkesvolym_total = BTA * virke_per_m2
+virkesvolym_total = BTA * virke_per_m2   # m3 virke
 kol_total = virkesvolym_total * kg_torrsubstans_per_m3 * kolandel
 co2_total = kol_total * co2_per_kg_kol / 1000
 
-tillvaxt_skogen_m3_per_ha_ar = bonitet
 co2_per_m3 = kg_torrsubstans_per_m3 * kolandel * co2_per_kg_kol / 1000
 
-skogsareal_ha = co2_total / (tillvaxt_skogen_m3_per_ha_ar * co2_per_m3 * rotation)
+# --- RÄKNA FRAM SKOGSAREAL ---
+virke_per_ha_per_rotation = bonitet * rotation    # m3 virke per ha per rotation
+skogsareal_ha = virkesvolym_total / virke_per_ha_per_rotation
 
 # --- HUSETS TOTALA KLIMATBELASTNING ---
 klimatpåverkan_total = BTA * klimatpåverkan_per_m2  # ton CO₂
@@ -61,9 +62,8 @@ co2_i_skog = np.zeros_like(years, dtype=float)
 co2_i_hus = np.zeros_like(years, dtype=float)
 
 for t in years:
-    # Skog: ackumulerar CO2 linjärt varje rotation, nollställs vid avverkning
     tid_i_rotation = t % rotation
-    co2_i_skog[t] = skogsareal_ha * tillvaxt_skogen_m3_per_ha_ar * co2_per_m3 * tid_i_rotation
+    co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
 
     tid_i_hus = t % hus_livslangd
 
@@ -83,7 +83,6 @@ for t in years:
             else:
                 co2_i_hus[t] = 0
 
-# --- Klimatneutralitet (%) ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
 for t in years:
     if klimatpåverkan_total > 0:
@@ -92,6 +91,10 @@ for t in years:
         klimatneutralitet[t] = np.nan
 
 kumulativt_netto = co2_i_skog - co2_i_hus
+
+# --- INFO OM SKOGSAREAL ---
+st.info(f"**Total skogsareal som krävs för att producera virket till huset är:**\n"
+        f"**{skogsareal_ha:.4f} ha** (givet vald bonitet och rotationsperiod).")
 
 fig1, ax1 = plt.subplots(figsize=(8, 4))
 ax1.plot(years, co2_i_hus, label="Inbyggd CO₂ i trähus (ton)", lw=2)
@@ -134,9 +137,12 @@ st.subheader("Kumulativt netto – skillnad mellan skogsupptag och inbyggd CO₂
 st.pyplot(fig3)
 
 with st.expander("Vetenskaplig bakgrund & källor"):
-    st.markdown("""
+    st.markdown(f"""
+    - Bonitet anger årlig volymtillväxt (m³ virke/ha/år).
+    - **Skogsarealen beräknas utifrån husets virkesbehov och skogens produktionsförmåga:**
+        - Skogsareal = Bostadsyta × mängd stomvirke per m² / (bonitet × rotationstid)
+        - För dessa parametrar: **skogsareal ≈ {skogsareal_ha:.4f} ha**
     - Omvandlingsfaktor: 1 m³ virke = 750 kg torrsubstans (50% kol), 1 kg C = 3,67 kg CO₂.
-    - Bonitet: Tillväxt i m³/ha/år enligt Skogsstyrelsen och SLU, t.ex. https://www.skogsstyrelsen.se.
     - Klimatneutralitetsgrad = (ackumulerad CO₂ i skog / husets totala klimatpåverkan) × 100.
     - Ackumulerad CO₂ i skog nollställs vid varje ny skogsrotation.
     - Hantering av virke vid rivning styr fortsatt kolinlagring (se IVL/SLU-rapporter).
