@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.6")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.7")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -103,7 +103,9 @@ for t in years:
     else:
         klimatneutralitet[t] = np.nan
 
-kumulativt_netto = co2_i_skog - co2_i_hus
+# --- KORREKT KUMULATIVT NETTO ---
+netto_per_ar = co2_i_skog - co2_i_hus
+kumulativt_netto = np.cumsum(netto_per_ar)
 
 # --- VISA SKOGSAREAL ---
 st.info(f"**Total skogsareal som krävs för att producera virket till huset är:**\n"
@@ -138,11 +140,11 @@ ax2.grid(alpha=0.3)
 
 # --- GRAF 3: Kumulativt netto ---
 fig3, ax3 = plt.subplots(figsize=(8, 4))
-ax3.plot(years, kumulativt_netto, label="Kumulativt netto (skog - hus) [ton CO₂]", lw=2, color="teal")
+ax3.plot(years, kumulativt_netto, label="Kumulativt netto (ackumulerad skillnad, skog - hus) [ton CO₂]", lw=2, color="teal")
 ax3.axhline(0, color='gray', linestyle='--', label="Noll-linje")
 ax3.set_xlabel("Tid (år)")
 ax3.set_ylabel("Ton CO₂")
-ax3.set_title("Kumulativt netto: skogsupptag minus lagrat i hus")
+ax3.set_title("Kumulativt netto: ackumulerat skogsupptag minus lagrat i hus")
 ax3.legend()
 ax3.grid(alpha=0.3)
 
@@ -150,7 +152,7 @@ st.subheader("CO₂-lagring i trähus och produktiv skog över tid")
 st.pyplot(fig1)
 st.subheader("Klimatneutralitetsgrad för trähus över tid (skogsupptag/klimatpåverkan)")
 st.pyplot(fig2)
-st.subheader("Kumulativt netto – skillnad mellan skogsupptag och inbyggd CO₂ i hus")
+st.subheader("Kumulativt netto – ackumulerad skillnad mellan skogsupptag och lagrat CO₂ i hus")
 st.pyplot(fig3)
 
 with st.expander("Vetenskaplig bakgrund & källor"):
@@ -161,6 +163,7 @@ with st.expander("Vetenskaplig bakgrund & källor"):
         - För dessa parametrar: **skogsareal ≈ {skogsareal_ha:.4f} ha**
     - Omvandlingsfaktor: 1 m³ virke = 750 kg torrsubstans (50% kol), 1 kg C = 3,67 kg CO₂.
     - Klimatneutralitetsgrad = (ackumulerad CO₂ i skog / husets totala klimatpåverkan) × 100.
+    - Ackumulerat netto = summerad överkompensation från varje år (dvs. såväl skogstillväxt som lagring i hus adderas över tiden).
     - Ackumulerad CO₂ i skog nollställs vid varje ny skogsrotation.
     - Hantering av virke vid rivning styr fortsatt kolinlagring (se IVL/SLU-rapporter).
     """)
