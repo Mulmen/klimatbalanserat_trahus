@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver. 1.1")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver. 1.2")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -82,29 +82,27 @@ for t in years:
 
     tid_i_hus = t % hus_livslangd
 
-    # === "Bränns konventionellt" ===
     if virkes_hantering == "Bränns konventionellt (släpper ut all CO₂)":
         if bygg_igen:
-            # Byggs om och om igen (sågtand)
+            # Sågtand: CO2 = co2_total när huset står, annars 0 (varje cykel)
             if tid_i_hus < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
         else:
-            # Bara ett hus, ingen nybyggnation (platt under livslängd, sen 0)
+            # Ett hus, aldrig nytt igen: CO2 när huset står, 0 efter rivning
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
 
-    # === "Återanvänds till nytt hus" eller "Bio-CCS" ===
     else:
+        # Återanvänds eller bio-CCS: alltid EN husvolym CO₂ om minst ett hus existerar
         if bygg_igen:
-            # Oavsett antal cykler, alltid EN husvolym CO₂ (ingen trappa, ingen sågtand)
-            if t >= 0:
-                co2_i_hus[t] = co2_total
+            # Oavsett cykel, alltid EN husvolym CO2, hela perioden
+            co2_i_hus[t] = co2_total
         else:
-            # Bara ett hus, ingen nybyggnation (platt under livslängd, sen 0)
+            # Ett hus, aldrig nytt igen: CO2 när huset står, 0 efter rivning
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
