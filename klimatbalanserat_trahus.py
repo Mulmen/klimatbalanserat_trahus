@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver. 0.5")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 0.6")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -62,27 +62,40 @@ co2_i_skog = np.zeros_like(years, dtype=float)
 co2_i_hus = np.zeros_like(years, dtype=float)
 
 for t in years:
+    # Skog
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
 
+    # Hus
     tid_i_hus = t % hus_livslangd
+    n_hus = t // hus_livslangd + 1 if bygg_igen else 1  # antal samtidiga husperioder
 
-    if virkes_hantering == "Återanvänds till nytt hus":
-        co2_i_hus[t] = co2_total
-    else:
+    if virkes_hantering == "Bränns konventionellt (släpper ut all CO₂)":
         if bygg_igen:
+            # Sågtandskurva: nollställ på rivningsår, annars alltid en husperiod åt gången
             if tid_i_hus == 0 and t != 0:
                 co2_i_hus[t] = 0
             else:
                 co2_i_hus[t] = co2_total
         else:
+            # Bara ett hus, aldrig nytt igen
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             elif t == hus_livslangd:
                 co2_i_hus[t] = 0
             else:
                 co2_i_hus[t] = 0
+    else:
+        # Återanvändning eller bio-CCS: trappa upp CO2 i huset varje ny period
+        if bygg_igen:
+            co2_i_hus[t] = n_hus * co2_total
+        else:
+            if t < hus_livslangd:
+                co2_i_hus[t] = co2_total
+            else:
+                co2_i_hus[t] = co2_total  # huset kvarstår för evigt
 
+# --- KLIMATNEUTRALITET ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
 for t in years:
     if klimatpåverkan_total > 0:
@@ -92,10 +105,11 @@ for t in years:
 
 kumulativt_netto = co2_i_skog - co2_i_hus
 
-# --- INFO OM SKOGSAREAL ---
+# --- VISA SKOGSAREAL ---
 st.info(f"**Total skogsareal som krävs för att producera virket till huset är:**\n"
         f"**{skogsareal_ha:.4f} ha** (givet vald bonitet och rotationsperiod).")
 
+# --- GRAF 1: CO₂-lagring i hus och skog ---
 fig1, ax1 = plt.subplots(figsize=(8, 4))
 ax1.plot(years, co2_i_hus, label="Inbyggd CO₂ i trähus (ton)", lw=2)
 ax1.plot(years, co2_i_skog, label="Ackumulerad CO₂ i skog (ton)", lw=2)
@@ -110,9 +124,11 @@ ax1.set_title("CO₂-lagring i hus och skog")
 ax1.legend()
 ax1.grid(alpha=0.3)
 
+# --- GRAF 2: Klimatneutralitetsgrad ---
 fig2, ax2 = plt.subplots(figsize=(8, 4))
 ax2.plot(years, klimatneutralitet, label="Klimatneutralitetsgrad (%)", lw=2, color="purple")
 ax2.axhline(100, color='gray', linestyle='--', label="100% klimatbalans")
+ax2.axvline(LCA_period, color='red', linestyle=':', label='LCA-period slutar')
 ax2.set_xlabel("Tid (år)")
 ax2.set_ylabel("Klimatneutralitetsgrad (%)")
 ax2.set_ylim(0, 150)
@@ -120,6 +136,7 @@ ax2.set_title("Klimatneutralitet över tid (skogsupptag/klimatpåverkan)")
 ax2.legend()
 ax2.grid(alpha=0.3)
 
+# --- GRAF 3: Kumulativt netto ---
 fig3, ax3 = plt.subplots(figsize=(8, 4))
 ax3.plot(years, kumulativt_netto, label="Kumulativt netto (skog - hus) [ton CO₂]", lw=2, color="teal")
 ax3.axhline(0, color='gray', linestyle='--', label="Noll-linje")
