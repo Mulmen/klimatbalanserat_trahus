@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.3")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.4")
 st.markdown("""
 Modellera klimatnyttan av att bygga trähus och plantera produktiv skog!
 Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs.
@@ -24,24 +24,23 @@ klimatpåverkan_per_m2 = st.sidebar.slider(
     "Husets klimatpåverkan (ton CO₂/m² BTA)", 0.150, 0.500, 0.250
 )
 
-virkes_hantering = st.sidebar.selectbox(
+# --- ANVÄND NYCKELORD (INTE BARA VISNINGSTEXT) ---
+alternativ = {
+    "Återanvänds till nytt hus": "ateranvandning",
+    "Energiåtervinns med bio-CCS (koldioxidlagring)": "bioccs",
+    "Bränns konventionellt (släpper ut all CO₂)": "konventionell"
+}
+valt_svar = st.sidebar.selectbox(
     "Vad händer med virket efter husets rivning?",
-    [
-        "Återanvänds till nytt hus",
-        "Energiåtervinns med bio-CCS (koldioxidlagring)",
-        "Bränns konventionellt (släpper ut all CO₂)"
-    ],
+    options=list(alternativ.keys()),
     index=0
 )
+virkes_hantering = alternativ[valt_svar]  # Kodord: "ateranvandning", "bioccs", "konventionell"
 
 bygg_igen = st.sidebar.checkbox("Bygg nytt hus efter livslängd?", value=True)
 
 years = np.arange(max_years+1)
 
-# --- DEBUG: Visa val för felsökning ---
-st.sidebar.markdown(f"**DEBUG:** valt virkeshantering = _{virkes_hantering}_")
-
-# --- FAKTA / OMFATTNING ---
 kg_torrsubstans_per_m3 = 750
 kolandel = 0.5
 co2_per_kg_kol = 3.67
@@ -81,50 +80,33 @@ for t in years:
     co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
     tid_i_hus = t % hus_livslangd
 
-    # Alternativ 1: Bränns konventionellt
-    if virkes_hantering == "Bränns konventionellt (släpper ut all CO₂)":
+    # --- Konventionell förbränning: sågtand/“block” ---
+    if virkes_hantering == "konventionell":
         if bygg_igen:
-            # Sågtand: co2_total under varje husperiod, 0 året när huset rivs
             if tid_i_hus < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
         else:
-            # Platt block: Bara ett hus, sedan 0
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
 
-    # Alternativ 2: Återanvänds till nytt hus
-    elif virkes_hantering == "Återanvänds till nytt hus":
+    # --- Återanvändning eller bio-CCS: EN husvolym hela perioden eller “block” ---
+    elif virkes_hantering in ("ateranvandning", "bioccs"):
         if bygg_igen:
-            # EN husvolym CO2 under hela perioden
             co2_i_hus[t] = co2_total
         else:
-            # Platt block: Bara ett hus, sedan 0
-            if t < hus_livslangd:
-                co2_i_hus[t] = co2_total
-            else:
-                co2_i_hus[t] = 0
-
-    # Alternativ 3: Energiåtervinns med bio-CCS
-    elif virkes_hantering == "Energiåtervinns med bio-CCS (koldioxidlagring)":
-        if bygg_igen:
-            # EN husvolym CO2 under hela perioden
-            co2_i_hus[t] = co2_total
-        else:
-            # Platt block: Bara ett hus, sedan 0
             if t < hus_livslangd:
                 co2_i_hus[t] = co2_total
             else:
                 co2_i_hus[t] = 0
 
     else:
-        # Fallback: (borde aldrig gå hit)
+        # Fallback
         co2_i_hus[t] = 0
 
-# --- KLIMATNEUTRALITET ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
 for t in years:
     if klimatpåverkan_total > 0:
