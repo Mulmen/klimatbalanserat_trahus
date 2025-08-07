@@ -56,21 +56,19 @@ for t in years:
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * tillvaxt_skogen_m3_per_ha_ar * co2_per_m3 * tid_i_rotation
 
-    # Hus: byggs på nytt efter varje livslängd om det får återuppföras
+    # Hus: olika logik beroende på hantering efter rivning
     cykel_hus = t // hus_livslangd
     tid_i_hus = t % hus_livslangd
 
-    if (cykel_hus * hus_livslangd) < max_years:
+    if virkes_hantering == "Återanvänds till nytt hus":
+        co2_i_hus[t] = co2_total
+    else:
+        # För bio-CCS eller konventionell förbränning:
+        # CO2 bara under tiden huset faktiskt finns (dvs under sin livslängd)
         if tid_i_hus < hus_livslangd:
             co2_i_hus[t] = co2_total
         else:
-            # När huset rivs:
-            if virkes_hantering == "Bränns konventionellt (släpper ut all CO₂)":
-                co2_i_hus[t] = 0  # all CO₂ återförs till atmosfären
-            elif virkes_hantering == "Energiåtervinns med bio-CCS (koldioxidlagring)":
-                co2_i_hus[t] = 0  # anses lagrat, tas ej med längre
-            elif virkes_hantering == "Återanvänds till nytt hus":
-                co2_i_hus[t] = co2_total  # Virket lever vidare i nytt hus (idealiserat)
+            co2_i_hus[t] = 0
 
 # --- Klimatneutralitet (%) ---
 klimatneutralitet = np.zeros_like(years, dtype=float)
@@ -135,5 +133,5 @@ with st.expander("Vetenskaplig bakgrund & källor"):
     """)
 
 st.markdown("""
-<small>Utvecklad av [Johan Holmqvist/IVL]. Kod på [GitHub repository](https://github.com/DITT-REPO-HÄR).</small>
+<small>Utvecklad av [Johan Holmqvist/IVL]. Kod på [GitHub repository](https://github.com/Mulmen/klimatbalanserat_trahus).</small>
 """, unsafe_allow_html=True)
