@@ -2,9 +2,9 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Klimatbalanserat trähus. Ver 1.7", layout="wide")
+st.set_page_config(page_title="Klimatbalanserat trähus", layout="wide")
 
-st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.7")
+st.title("🌲 Klimatbalanserat trähus – dynamisk modell. Ver 1.8")
 st.markdown(
     "Modellera klimatnyttan av att bygga trähus och plantera produktiv skog! "
     "Justera parametrar, analysera CO₂-bindning, och välj vad som sker när huset rivs."
@@ -74,7 +74,11 @@ for t in years:
     tid_i_rotation = t % rotation
     co2_i_skog[t] = skogsareal_ha * bonitet * co2_per_m3 * tid_i_rotation
 
-    # HUSLOGIK
+    if bygg_igen:
+        antal_hus = t // hus_livslangd + 1
+    else:
+        antal_hus = 1 if t < hus_livslangd else 0
+
     if virkes_hantering == "konventionell":
         if bygg_igen:
             tid_i_hus = t % hus_livslangd
@@ -90,13 +94,12 @@ for t in years:
 
     elif virkes_hantering in ("ateranvandning", "bioccs"):
         if bygg_igen:
-            antal_hus = t // hus_livslangd + 1
-            co2_i_hus[t] = antal_hus * co2_total  # TRAPPA: ackumulerat antal hus
+            co2_i_hus[t] = antal_hus * co2_total  # TRAPPA
         else:
             if t < hus_livslangd:
-                co2_i_hus[t] = co2_total  # BLOCK: ett hus
+                co2_i_hus[t] = co2_total  # BLOCK
             else:
-                co2_i_hus[t] = co2_total  # Blocket fortsätter (CO2 är kvar i materialet/berget)
+                co2_i_hus[t] = co2_total  # Blocket fortsätter
 
     else:
         co2_i_hus[t] = 0
@@ -108,7 +111,25 @@ for t in years:
     else:
         klimatneutralitet[t] = np.nan
 
-kumulativt_netto = co2_i_skog - co2_i_hus
+# --- Summerat CO₂-upptag (NY GRAF) ---
+# Kumulativt skogsupptag (summerat över rotationerna) och summerat CO2 i hus
+cum_co2_skog = np.zeros_like(years, dtype=float)
+cum_co2_hus = np.zeros_like(years, dtype=float)
+cum_co2_summa = np.zeros_like(years, dtype=float)
+for t in years:
+    if t == 0:
+        cum_co2_skog[t] = co2_i_skog[t]
+        cum_co2_hus[t] = co2_i_hus[t]
+    else:
+        # Vid varje ny rotation lägg till ett "varv" till totala ackumulerade
+        if t % rotation == 0 and t != 0:
+            # Skogen återplanteras, börja om, men summera med föregående ackumulerade
+            cum_co2_skog[t] = cum_co2_skog[t-1] + co2_i_skog[t]
+        else:
+            cum_co2_skog[t] = cum_co2_skog[t-1] + (co2_i_skog[t] - co2_i_skog[t-1])
+        # Ackumulerat i hus är summan över tid (CO2 "försvinner" om huset rivs och CO2 släpps ut)
+        cum_co2_hus[t] = cum_co2_hus[t-1] + (co2_i_hus[t] - co2_i_hus[t-1])
+    cum_co2_summa[t] = cum_co2_skog[t] + cum_co2_hus[t]
 
 st.info(
     f"**Total skogsareal som krävs för att producera virket till huset är:**\n"
@@ -149,21 +170,22 @@ ax2.set_title("Klimatneutralitet över tid (skogsupptag/klimatpåverkan)")
 ax2.legend()
 ax2.grid(alpha=0.3)
 
-fig3, ax3 = plt.subplots(figsize=(8, 4))
-ax3.plot(years, kumulativt_netto, label="Netto (skogsupptag - CO₂ i hus) [ton CO₂]", lw=2, color="teal")
-ax3.axhline(0, color='gray', linestyle='--', label="Noll-linje")
-ax3.set_xlabel("Tid (år)")
-ax3.set_ylabel("Ton CO₂")
-ax3.set_title("Netto: ackumulerad CO₂ i skog minus lagrat i hus")
-ax3.legend()
-ax3.grid(alpha=0.3)
+fig4, ax4 = plt.subplots(figsize=(8, 4))
+ax4.plot(years, cum_co2_skog, label="Summerat CO₂-upptag i skog (ton)", lw=2)
+ax4.plot(years, cum_co2_hus, label="Summerat lagrat CO₂ i hus (ton)", lw=2)
+ax4.plot(years, cum_co2_summa, label="Totalt summerat CO₂-upptag (skog + hus)", lw=3, linestyle='--')
+ax4.set_xlabel("Tid (år)")
+ax4.set_ylabel("Ackumulerat CO₂ (ton)")
+ax4.set_title("Summerat CO₂-upptag (skogsupptag och inlagrat CO₂)")
+ax4.legend()
+ax4.grid(alpha=0.3)
 
 st.subheader("CO₂-lagring i trähus och produktiv skog över tid")
 st.pyplot(fig1)
 st.subheader("Klimatneutralitetsgrad för trähus över tid (skogsupptag/klimatpåverkan)")
 st.pyplot(fig2)
-st.subheader("Netto – skillnad mellan skogsupptag och lagrat CO₂ i hus")
-st.pyplot(fig3)
+st.subheader("Summerat CO₂-upptag (skogsupptag och inlagrat CO₂)")
+st.pyplot(fig4)
 
 with st.expander("Vetenskaplig bakgrund & källor"):
     st.markdown(
